@@ -20,11 +20,11 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
 
   return (
     <div className={`flex items-start gap-3 animate-fade-in ${message.isUser ? 'flex-row-reverse' : ''}`}>
-      <div className={`p-2 rounded-full ${message.isUser ? 'bg-amber-600' : 'bg-amber-100'}`}>
+      <div className={`p-2 rounded-full ${message.isUser ? 'bg-gray-800' : 'bg-gray-200'}`}>
         {message.isUser ? (
-          <User className={`w-4 h-4 ${message.isUser ? 'text-white' : 'text-amber-600'}`} />
+          <User className={`w-4 h-4 ${message.isUser ? 'text-white' : 'text-gray-700'}`} />
         ) : (
-          <Book className="w-4 h-4 text-amber-600" />
+          <Book className="w-4 h-4 text-gray-700" />
         )}
       </div>
       
@@ -32,8 +32,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
         <div
           className={`rounded-2xl px-4 py-3 ${
             message.isUser
-              ? 'bg-amber-600 text-white'
-              : 'bg-gray-100 text-gray-800'
+              ? 'bg-gray-800 text-white'
+              : 'bg-white text-gray-800 border border-gray-200'
           } shadow-sm`}
         >
           <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.text}</p>

@@ -63,18 +63,18 @@ export default {
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
 				},
-				// Book-themed colors
-				parchment: {
-					50: '#fefbf3',
-					100: '#fdf4e1',
-					200: '#fae8c2',
-					300: '#f6d698',
-					400: '#f0c16c',
-					500: '#eaac4a',
-					600: '#d99637',
-					700: '#b5792f',
-					800: '#926030',
-					900: '#784f2a',
+				// Paleta de colores neutros para el tema de libros
+				neutral: {
+					50: '#fafafa',
+					100: '#f5f5f5',
+					200: '#e5e5e5',
+					300: '#d4d4d4',
+					400: '#a3a3a3',
+					500: '#737373',
+					600: '#525252',
+					700: '#404040',
+					800: '#262626',
+					900: '#171717',
 				}
 			},
 			borderRadius: {
