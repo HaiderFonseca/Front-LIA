@@ -30,8 +30,14 @@ interface BookUploadRequest {
   title: string;
   author: string;
   description: string;
-  review: string;
+  rating: string;
 }
+
+interface SystemStats {
+  total_books: number;
+  total_queries: number;
+}
+
 
 // ============ CLASE PRINCIPAL DEL SERVICIO ============
 class ChatService {
@@ -42,109 +48,90 @@ class ChatService {
   // ============ MÉTODO PRINCIPAL: ENVIAR MENSAJE AL MODELO ============
   async sendMessage(request: ChatRequest): Promise<ChatResponse> {
     try {
-      console.log('=== ENVIANDO SOLICITUD AL MODELO LOCAL ===');
-      console.log('URL del modelo:', this.baseURL);
+      console.log('=== ENVIANDO TEXTO A /embed_text DEL MODELO LOCAL ===');
+      console.log('URL del modelo:', 'http://34.123.171.27:8002/embed_text');
       console.log('Mensaje del usuario:', request.message);
-      console.log('Historial de conversación:', request.conversationHistory?.length || 0, 'mensajes');
-      
-      // ============ AQUÍ SE REALIZA LA PETICIÓN AL MODELO ============
-      // NOTA: Ajusta la URL y el formato según tu implementación
-      const response = await fetch(`${this.baseURL}/chat/recommend`, {
+
+      const response = await fetch('http://34.123.171.27:8002/embed_text', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
         body: JSON.stringify({
-          // ============ FORMATO DE ENTRADA PARA EL MODELO ============
-          message: request.message,           // Pregunta del usuario
-          history: request.conversationHistory, // Historial completo
-          // Puedes agregar más campos aquí según necesites:
-          // user_id: 'user123',
-          // session_id: 'session456',
-          // max_results: 5,
+          text: request.message,
+          chat_id: 0,
         }),
       });
 
-      // Verificar si la respuesta es exitosa
       if (!response.ok) {
         throw new Error(`Error HTTP: ${response.status} - ${response.statusText}`);
       }
 
       const data = await response.json();
-      
-      console.log('=== RESPUESTA RECIBIDA DEL MODELO ===');
+
+      console.log('=== RESPUESTA RECIBIDA DE /embed_text ===');
       console.log('Respuesta completa:', data);
-      console.log('Recomendación:', data.response || data.recommendation);
-      console.log('Confianza:', data.confidence);
-      
-      // ============ FORMATO DE SALIDA ESPERADO ============
-      // NOTA: Ajusta estos campos según lo que devuelve tu modelo
+      console.log('Usando solo el campo "response":', data.response);
+
       return {
-        response: data.response || data.recommendation || data.answer,
-        confidence: data.confidence,
-        recommendations: data.recommendations || data.book_list,
-        sources: data.sources || data.references
+        response: data.response,
+        confidence: 1, // Valor fijo ya que no viene del modelo
       };
-      
+
     } catch (error) {
       console.error('=== ERROR AL CONECTAR CON EL MODELO ===');
-      console.error('Error details:', error);
-      
-      // ============ MENSAJE DE ERROR PARA EL USUARIO ============
-      // Respuesta de fallback cuando hay problemas de conexión
+      console.error('Detalles del error:', error);
+
       return {
         response: "Lo siento, no puedo conectarme con el sistema de recomendaciones en este momento. Por favor, verifica que el modelo esté ejecutándose y vuelve a intentar.",
-        confidence: 0
+        confidence: 0,
       };
     }
   }
 
   // ============ MÉTODO PARA SUBIR LIBROS AL SISTEMA RAG ============
   async uploadBook(bookData: BookUploadRequest): Promise<any> {
-    try {
-      console.log('=== SUBIENDO LIBRO AL SISTEMA RAG ===');
-      console.log('Datos del libro:', bookData);
-      
-      // ============ PETICIÓN PARA INDEXAR NUEVO LIBRO ============
-      const response = await fetch(`${this.baseURL}/books/add`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          // ============ FORMATO PARA INDEXAR LIBRO EN RAG ============
-          title: bookData.title,
-          author: bookData.author,
-          description: bookData.description,
-          review: bookData.review,
-          // Campos adicionales que puedes necesitar:
-          // genre: bookData.genre,
-          // publication_year: bookData.year,
-          // isbn: bookData.isbn,
-        }),
-      });
+  try {
+    console.log('=== SUBIENDO LIBRO AL SISTEMA RAG ===');
+    console.log('Datos del libro:', bookData);
 
-      if (!response.ok) {
-        throw new Error(`Error HTTP: ${response.status}`);
+    const parsedRating = parseFloat(bookData.rating);
+    if (isNaN(parsedRating)) {
+      return { success: false, error: 'Rating inválido' };
+    }
+
+    const response = await fetch('http://34.123.171.27:8001/upload_document', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: 0,
+        titulo: bookData.title,
+        texto: bookData.description,
+        rating: parsedRating,
+      }),
+    });
+
+    if (!response.ok) {
+      return { success: false, error: `Error HTTP: ${response.status}` };
+    }
+
+    const result = await response.json();
+    return { success: true, data: result };
+
+  } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.error('Error:', error.message);
+        return { success: false, error: error.message };
+      } else {
+        console.error('Error desconocido:', error);
+        return { success: false, error: 'Ocurrió un error inesperado.' };
       }
-
-      const result = await response.json();
-      
-      console.log('=== LIBRO INDEXADO EXITOSAMENTE ===');
-      console.log('Resultado:', result);
-      
-      return result;
-      
-    } catch (error) {
-      console.error('=== ERROR AL SUBIR LIBRO ===');
-      console.error('Error:', error);
-      throw error;
     }
   }
 
   // ============ MÉTODO PARA OBTENER ESTADÍSTICAS DEL SISTEMA ============
-  async getSystemStats(): Promise<any> {
+  async getSystemStats(): Promise<SystemStats | null> {
     try {
       const response = await fetch(`${this.baseURL}/stats`, {
         method: 'GET',
@@ -173,10 +160,12 @@ class ChatService {
 
   // ============ MÉTODO PARA PROBAR CONEXIÓN ============
   async testConnection(): Promise<boolean> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
     try {
       const response = await fetch(`${this.baseURL}/health`, {
         method: 'GET',
-        timeout: 5000, // 5 segundos de timeout
+        signal: controller.signal,
       });
       
       return response.ok;

@@ -5,13 +5,14 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { BookOpen, Save, AlertCircle } from 'lucide-react';
+import { chatService } from '@/services/chatService';
 
 // Interfaz para los datos del libro (sin id y dateAdded que se generan automáticamente)
 interface BookFormData {
   title: string;
   author: string;
   description: string;
-  review: string;
+  rating: string;
 }
 
 // Props del componente
@@ -25,7 +26,7 @@ const AddBookForm: React.FC<AddBookFormProps> = ({ onAddBook }) => {
     title: '',
     author: '',
     description: '',
-    review: ''
+    rating: ''
   });
 
   // Estado para mostrar errores de validación
@@ -55,11 +56,11 @@ const AddBookForm: React.FC<AddBookFormProps> = ({ onAddBook }) => {
       newErrors.description = 'La descripción debe tener al menos 20 caracteres';
     }
 
-    // Validar reseña (obligatorio, mínimo 10 caracteres)
-    if (!formData.review.trim()) {
-      newErrors.review = 'La reseña es obligatoria';
-    } else if (formData.review.trim().length < 10) {
-      newErrors.review = 'La reseña debe tener al menos 10 caracteres';
+    const ratingFloat = parseFloat(formData.rating);
+    if (isNaN(ratingFloat)) {
+      newErrors.rating = 'La calificación es obligatoria';
+    } else if (ratingFloat < 0 || ratingFloat > 5) {
+      newErrors.rating = 'Debe estar entre 0 y 5';
     }
 
     setErrors(newErrors);
@@ -81,53 +82,61 @@ const AddBookForm: React.FC<AddBookFormProps> = ({ onAddBook }) => {
       }));
     }
   };
+  const handleFloatInputChange = (field: keyof BookFormData, value: number) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+
+    if (errors[field]) {
+      setErrors(prev => ({
+        ...prev,
+        [field]: undefined
+      }));
+    }
+  };
 
   // ============ FUNCIÓN PARA ENVIAR EL FORMULARIO ============
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     console.log('=== INTENTANDO AGREGAR NUEVO LIBRO ===');
     console.log('Datos del formulario:', formData);
 
-    // Validar formulario
     if (!validateForm()) {
       console.log('Formulario inválido:', errors);
       return;
     }
 
-    // ============ AQUÍ SE ENVÍAN LOS DATOS AL SISTEMA PRINCIPAL ============
-    // NOTA: Los datos se envían a la función onAddBook que viene de Index.tsx
-    // FORMATO DE DATOS ENVIADOS:
-    // {
-    //   title: string,        // Título del libro
-    //   author: string,       // Autor del libro  
-    //   description: string,  // Descripción del contenido
-    //   review: string        // Reseña o crítica del libro
-    // }
-    
     try {
-      onAddBook(formData);
-      
-      console.log('=== LIBRO AGREGADO EXITOSAMENTE ===');
-      console.log('Título:', formData.title);
-      console.log('Autor:', formData.author);
-      console.log('Descripción:', formData.description.substring(0, 50) + '...');
-      console.log('Reseña:', formData.review.substring(0, 50) + '...');
+      const result = await chatService.uploadBook(formData);
 
-      // Mostrar mensaje de éxito
-      setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 3000);
+      if (result?.success) {
+        console.log('Libro agregado correctamente en el backend.');
+        console.log('Mensaje del backend:', result.message);
+        onAddBook(formData);
+        // Mostrar mensaje de éxito
+        setShowSuccess(true);
+        setTimeout(() => setShowSuccess(false), 3000);
 
-      // Limpiar formulario
-      setFormData({
-        title: '',
-        author: '',
-        description: '',
-        review: ''
-      });
+        // Limpiar formulario
+        setFormData({
+          title: '',
+          author: '',
+          description: '',
+          rating: ''
+        });
+
+      } else {
+        console.warn(' El backend no confirmó el éxito.');
+        console.warn('Respuesta:', result);
+
+        // Aquí podrías mostrar un mensaje de error al usuario también
+      }
 
     } catch (error) {
-      console.error('Error al agregar libro:', error);
+      console.error(' Error al agregar libro:', error);
+      // Aquí también podrías mostrar un mensaje visual de error
     }
   };
 
@@ -213,31 +222,30 @@ const AddBookForm: React.FC<AddBookFormProps> = ({ onAddBook }) => {
           </div>
         </div>
 
-        {/* Campo: Reseña */}
+        {/* Campo: Calificación */}
         <div className="space-y-2">
-          <Label htmlFor="review" className="text-sm font-medium text-gray-700">
-            Reseña o Crítica *
+          <Label htmlFor="rating" className="text-sm font-medium text-gray-700">
+            Calificación (de 0 a 5) *
           </Label>
-          <Textarea
-            id="review"
-            value={formData.review}
-            onChange={(e) => handleInputChange('review', e.target.value)}
-            placeholder="Escribe una reseña, crítica o comentario sobre el libro..."
-            rows={4}
-            className={`w-full resize-none ${errors.review ? 'border-red-500 focus:border-red-500' : 'border-gray-300'}`}
+          <Input
+            id="rating"
+            type="number"
+            step="0.1"
+            min="0"
+            max="5"
+            value={formData.rating}
+            onChange={(e) => handleInputChange('rating', e.target.value)}
+            placeholder="Ej: 4.5"
+            className={`w-full ${errors.rating ? 'border-red-500 focus:border-red-500' : 'border-gray-300'}`}
           />
-          <div className="flex justify-between items-center">
-            {errors.review && (
-              <div className="flex items-center gap-1 text-red-600 text-sm">
-                <AlertCircle className="w-4 h-4" />
-                {errors.review}
-              </div>
-            )}
-            <span className="text-xs text-gray-500 ml-auto">
-              {formData.review.length} caracteres (mínimo 10)
-            </span>
-          </div>
+          {errors.rating && (
+            <div className="flex items-center gap-1 text-red-600 text-sm">
+              <AlertCircle className="w-4 h-4" />
+              {errors.rating}
+            </div>
+          )}
         </div>
+
 
         {/* Botón de envío */}
         <div className="flex justify-center pt-4">
